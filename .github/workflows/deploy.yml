@@ -6,27 +6,63 @@ on:
       - main
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Test website files
+      - name: Test website
         run: |
           test -f index.html
           test -f style.css
           test -f script.js
-          echo "Basic website validation passed."
+          echo "Website files found successfully"
 
-      - name: Build / Package
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build / Package website
         run: |
           mkdir -p dist
-          cp index.html style.css script.js dist/
-          echo "Website packaged successfully."
+          cp index.html dist/
+          cp style.css dist/
+          cp script.js dist/
+          echo "Website packaged successfully"
 
-      # AWS deployment will be added after the S3 bucket is created.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-build
+          path: dist/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: website-build
+          path: dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::264053230266:role/GitHubActions-DevOpsWebsite
+          aws-region: eu-north-1
+
+      - name: Deploy website to S3
+        run: |
+          aws s3 sync dist/ s3://devops-cicd-website-shubham-5199 --delete
