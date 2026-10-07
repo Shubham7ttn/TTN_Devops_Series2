@@ -57,11 +57,44 @@ jobs:
           name: website-build
           path: dist
 
+      - name: Inspect GitHub OIDC claims
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TOKEN_RESPONSE="$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")"
+
+          TOKEN="$(echo "$TOKEN_RESPONSE" | jq -r '.value')"
+
+          PAYLOAD="$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | awk '
+            {
+              remainder = length($0) % 4
+              if (remainder == 2) $0 = $0 "=="
+              else if (remainder == 3) $0 = $0 "="
+              print
+            }
+          ' | base64 -d 2>/dev/null)"
+
+          echo "$PAYLOAD" | jq '{
+            iss,
+            aud,
+            sub,
+            repository,
+            repository_id,
+            repository_owner,
+            repository_owner_id,
+            ref,
+            ref_type,
+            job_workflow_ref
+          }'
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::264053230266:role/GitHubActions-DevOpsWebsite
-          aws-region: eu-north-1
+          aws-region: ap-south-1
 
       - name: Deploy website to S3
         run: |
